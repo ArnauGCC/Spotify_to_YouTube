@@ -18,14 +18,16 @@ def create_sp_credentials(client_ID, client_Secret):
 
 
 def get_sp_songs(sp, pl_id, offs, lim):
-    pl_id = "spotify:playlist:" + pl_id
-    response = sp.playlist_items(pl_id,
-                                 limit=lim,
-                                 offset=offs,
-                                 fields='items.track.name,items.track.artists.name,total',
-                                 #additional_types=['episode']
-                                 )
-    return response
+    if (offs > 0): 
+        pl_id = "spotify:playlist:" + pl_id
+        response = sp.playlist_items(pl_id,
+                                    limit=lim,
+                                    offset=offs,
+                                    fields='items.track.name,items.track.artists.name,total',
+                                    #additional_types=['episode']
+                                    )
+        return response['items']
+    return []
 
 
 def create_yt_credentials(client_secret):
@@ -47,10 +49,10 @@ def create_yt_credentials(client_secret):
     return yt
 
 
-def add_new_yt_ids(songs, yt):
+def add_new_yt_ids(songs):
     #For each song (name + artists) get the ID of a matching YT video
     new_yt_ids = []
-    for song in songs['items']:
+    for song in songs:
         search_yt = song['track']['name'] + " "
         for artist in song['track']['artists']:
             search_yt += artist['name'] + " "
@@ -66,7 +68,7 @@ def add_new_yt_ids(songs, yt):
     return new_yt_ids
 
 
-def add_songs_to_yt_playlist(ids, yt, playlist_id):
+def add_songs_to_yt_playlist(ids, playlist_id):
     for yt_id in ids:
         request = yt.playlistItems().insert(
             part="snippet",
@@ -82,11 +84,19 @@ def add_songs_to_yt_playlist(ids, yt, playlist_id):
         )
         response = request.execute()
 
-def get_offset(yt, pl_id):
-    return int(yt.playlists().list(
-        part="contentDetails",
-        id=pl_id
-    ).execute()['items'][0]['contentDetails']['itemCount'])
+def get_offset(pl_id, client_secret_yt, i):
+    global yt
+    while(i < len(client_secret_yt)):
+        try:
+            offs = int(yt.playlists().list(
+                        part="contentDetails",
+                        id=pl_id
+                    ).execute()['items'][0]['contentDetails']['itemCount'])
+            return offs, i
+        except googleapiclient.errors.HttpError:
+            i += 1
+            if (i < len(client_secret_yt)): yt = create_yt_credentials(client_secret_yt[i])
+    return -1, i
 
 def main():
     dotenv_path = find_dotenv()
@@ -104,19 +114,20 @@ def main():
 
     #Create YT credentials and set offset
     i = 0
+    global yt
     yt = create_yt_credentials(CLIENT_SECRET_YT[i])    
-    offset = get_offset(yt, YT_PL_ID)
+    offset, i = get_offset(YT_PL_ID, CLIENT_SECRET_YT, i)
 
     #Get songs information from SP
     songs_inf = get_sp_songs(sp, SP_PL_ID, offset, LIM)
     
-    while len(songs_inf['items']) > 0 and i < len(CLIENT_SECRET_YT):
+    while len(songs_inf) > 0 and i < len(CLIENT_SECRET_YT):
         try:
             #Get new YT IDs (10 songs every iteration)
-            new_yt_ids = add_new_yt_ids(songs_inf, yt)
+            new_yt_ids = add_new_yt_ids(songs_inf)
             
             #Insert the new songs found to the YT playlist
-            add_songs_to_yt_playlist(new_yt_ids, yt, YT_PL_ID)
+            add_songs_to_yt_playlist(new_yt_ids, YT_PL_ID)
 
             #Set new offset
             offset += LIM
@@ -125,15 +136,13 @@ def main():
             i += 1
             if i < len(CLIENT_SECRET_YT):
                 yt = create_yt_credentials(CLIENT_SECRET_YT[i])
-                offset = get_offset(yt, YT_PL_ID)
-
-            else:
-                print("More tokens needed: The request cannot be completed because you have exceeded your Youtube fee")
+                offset, i = get_offset(YT_PL_ID, CLIENT_SECRET_YT, i)
 
         #Get songs information from SP
         songs_inf = get_sp_songs(sp, SP_PL_ID, offset, LIM)
-        print(offset, "/", songs_inf['total'], "songs added")
+        if (offset > 0): print(offset, "/", songs_inf['total'], "songs added")
 
+    if(i == len(CLIENT_SECRET_YT)): print("More tokens needed: The request cannot be completed because you have exceeded your Youtube fee")
     print("NEW SONGS NOT FOUND")
 
 
