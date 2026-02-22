@@ -1,0 +1,7 @@
+.vscode
+/fut*
+.cache
+.env
+/Ñ*
+client*
+*.log
