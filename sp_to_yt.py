@@ -88,8 +88,8 @@ def main():
     dotenv_path = find_dotenv()
     load_dotenv(dotenv_path)
 
-    CLIENT_ID_SP = "sdgf"
-    CLIENT_SECRET_SP = "sdf"
+    CLIENT_ID_SP = os.getenv("CLIENT_ID_SP")
+    CLIENT_SECRET_SP = os.getenv("CLIENT_SECRET_SP")
     CLIENT_SECRET_YT = os.getenv("CLIENT_SECRET_YT").split(",")
     SP_PL_ID = os.getenv("SP_PL_ID")
     YT_PL_ID = os.getenv("YT_PL_ID")
