@@ -17,10 +17,10 @@ def create_sp_credentials(client_ID, client_Secret):
     return sp
 
 
-def get_sp_songs(sp, pl_id, offs):
+def get_sp_songs(sp, pl_id, offs, lim):
     pl_id = "spotify:playlist:" + pl_id
     response = sp.playlist_items(pl_id,
-                                 limit=10,
+                                 limit=lim,
                                  offset=offs,
                                  fields='items.track.name,items.track.artists.name,total',
                                  #additional_types=['episode']
@@ -66,7 +66,7 @@ def add_new_yt_ids(songs, yt):
     return new_yt_ids
 
 
-def add_songs_to_yt_playlist(ids, yt, playlist_id, fd):
+def add_songs_to_yt_playlist(ids, yt, playlist_id):
     for yt_id in ids:
         request = yt.playlistItems().insert(
             part="snippet",
@@ -81,8 +81,12 @@ def add_songs_to_yt_playlist(ids, yt, playlist_id, fd):
             }
         )
         response = request.execute()
-        os.write(fd, (yt_id + "\n").encode('utf-8'))
 
+def get_offset(yt, pl_id):
+    return int(yt.playlists().list(
+        part="contentDetails",
+        id=pl_id
+    ).execute()['items'][0]['contentDetails']['itemCount'])
 
 def main():
     dotenv_path = find_dotenv()
@@ -93,27 +97,18 @@ def main():
     CLIENT_SECRET_YT = os.getenv("CLIENT_SECRET_YT").split(",")
     SP_PL_ID = os.getenv("SP_PL_ID")
     YT_PL_ID = os.getenv("YT_PL_ID")
+    LIM = 10
     
     #Create Spotify credentials 
     sp = create_sp_credentials(CLIENT_ID_SP, CLIENT_SECRET_SP)
 
-    #Create a playlist folder with a file to store YT_IDs
-    pl_name = sp.playlist(SP_PL_ID, fields='name')['name']
-    os.makedirs(pl_name, exist_ok=True)
-
-    yt_ids_path = pl_name + "/YT_IDs.txt"
-    fd = os.open(yt_ids_path, os.O_RDWR|os.O_CREAT)
-
-    size = os.path.getsize(yt_ids_path)     #size == number of songs already added in the YT list
-    offset = int(size/13)                   #13 == number of Bytes ID in YT (with next line)
-    os.lseek(fd, 0, os.SEEK_END)
-
-    #Create YT credentials
+    #Create YT credentials and set offset
     i = 0
-    yt = create_yt_credentials(CLIENT_SECRET_YT[i])
+    yt = create_yt_credentials(CLIENT_SECRET_YT[i])    
+    offset = get_offset(yt, YT_PL_ID)
 
     #Get songs information from SP
-    songs_inf = get_sp_songs(sp, SP_PL_ID, offset)
+    songs_inf = get_sp_songs(sp, SP_PL_ID, offset, LIM)
     
     while len(songs_inf['items']) > 0 and i < len(CLIENT_SECRET_YT):
         try:
@@ -121,19 +116,22 @@ def main():
             new_yt_ids = add_new_yt_ids(songs_inf, yt)
             
             #Insert the new songs found to the YT playlist
-            add_songs_to_yt_playlist(new_yt_ids, yt, YT_PL_ID, fd)
+            add_songs_to_yt_playlist(new_yt_ids, yt, YT_PL_ID)
+
+            #Set new offset
+            offset += LIM
 
         except googleapiclient.errors.HttpError:
             i += 1
             if i < len(CLIENT_SECRET_YT):
                 yt = create_yt_credentials(CLIENT_SECRET_YT[i])
+                offset = get_offset(yt, YT_PL_ID)
 
             else:
                 print("More tokens needed: The request cannot be completed because you have exceeded your Youtube fee")
 
-        #Set new offset and get songs information from SP
-        offset = int(os.path.getsize(yt_ids_path)/13)
-        songs_inf = get_sp_songs(sp, SP_PL_ID, offset)
+        #Get songs information from SP
+        songs_inf = get_sp_songs(sp, SP_PL_ID, offset, LIM)
         print(offset, "/", songs_inf['total'], "songs added")
 
     print("NEW SONGS NOT FOUND")
