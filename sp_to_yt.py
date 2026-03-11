@@ -27,8 +27,9 @@ def get_sp_songs(sp, pl_id, offs, lim):
                                     #additional_types=['episode']
                                     )
         return response
-    return []
-
+    print("Offset has invalid value")
+    exit()
+    
 
 def create_yt_credentials(client_secret):
     scopes = ["https://www.googleapis.com/auth/youtube.force-ssl"]
