@@ -26,7 +26,7 @@ def get_sp_songs(sp, pl_id, offs, lim):
                                     fields='items.track.name,items.track.artists.name,total',
                                     #additional_types=['episode']
                                     )
-        return response['items']
+        return response
     return []
 
 
@@ -121,10 +121,10 @@ def main():
     #Get songs information from SP
     songs_inf = get_sp_songs(sp, SP_PL_ID, offset, LIM)
     
-    while len(songs_inf) > 0 and i < len(CLIENT_SECRET_YT):
+    while len(songs_inf['items']) > 0 and i < len(CLIENT_SECRET_YT):
         try:
             #Get new YT IDs (10 songs every iteration)
-            new_yt_ids = add_new_yt_ids(songs_inf)
+            new_yt_ids = add_new_yt_ids(songs_inf['items'])
             
             #Insert the new songs found to the YT playlist
             add_songs_to_yt_playlist(new_yt_ids, YT_PL_ID)
